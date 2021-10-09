@@ -1,16 +1,25 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <link rel="stylesheet" href="style.css">
-        <script src="sw.js"></script>
-    </head>
-    <body>
-        <div class="center">
-            <div id="sw" class="swtime">00:00.00</div>
-            <div class="swheader">
-                <div class="swstatus" id="statuslbl">READY</div>
-                <div class="swcontrol"><button class="btn nextbtn" id="nextButton" onclick="sw.onButtonNext()">Next</button></div>
+
+<head>
+    <link rel="stylesheet" href="style.css">
+    <script src="sw.js"></script>
+</head>
+
+<body>
+    <div class="center">
+        <div id="sw" class="swtime">
+            <div id="MM" class="swcomponent">00</div>:<div id="SS" class="swcomponent">00</div>.<div id="NN" class="swcomponent">00</div>
+        </div>
+        <div class="swheader">
+            <div class="swstatus" id="lblStatus">READY</div>
+            <div class="swcontrol">
+                <button class="btn nextbtn" id="btnNext" onclick="sm.onButtonNext()">Next</button>
+                <div id="beamState" onclick="sm.onBeamToggle()">0</div>
             </div>
-          </div>
-    </body>
+            
+        </div>
+    </div>
+</body>
+
 </html>

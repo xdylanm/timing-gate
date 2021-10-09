@@ -1,60 +1,80 @@
 html {
-    min-height: 100%;
-    background-image: radial-gradient(white, #c0c0c0);
-  }
-  
-  .center {
-    position: fixed;
-    top: 20%;
-    left: 10%;
-    width: 80%;
-    /*background-color: gray;*/
-    
-    font-family: 'Lucida Console', 'Courier New', Courier, monospace;
-  }
-  
-  .swtime {
-    position: relative;
-    width: 100%;
-    /*background-color: wheat;*/
-    font-size: 14vw;
-    text-align: center;
-  }
-  
-  .swheader {
-    position: relative;
-    left: 15%;
-    width: 70%;  
-    /*background-color: lightblue;*/
-  }
-  
-  .swstatus {
-    /*background-color: lightgreen;*/
-    font-size: 6vw;
-    padding-top: 1vw;
-    text-align: left;
-    float: left;
-  }
-  
-  .swcontrol {
-    position: relative;
-    float: right;
-  }
-  
-  .btn {
-    border: 2px solid black;
-    background-color: white;
-    color: black;
-    padding-top: 1vw;
-    padding-bottom: 1vw;
-    font-family: 'Lucida Console', 'Courier New', Courier, monospace;
-  }
-  
-  .nextbtn {
-    width: 24vw;
-    font-size: 6vw;
-  }
-  
-  .nextbtn:hover {
-    background-color: #d8d8d8;
-  }
+  min-height: 100%;
+  background-image: radial-gradient(white, #c0c0c0);
+}
+
+.center {
+  position: fixed;
+  top: 20%;
+  left: 10%;
+  width: 80%;
+  /*background-color: gray;*/
+
+  font-family: 'Lucida Console', 'Courier New', Courier, monospace;
+}
+
+.swtime {
+  position: relative;
+  width: 100%;
+  /*background-color: wheat;*/
+  font-size: 14vw;
+  text-align: center;
+}
+
+.swheader {
+  position: relative;
+  left: 8%;
+  width: 84%;  
+  /*background-color: lightblue;*/
+}
+
+.swstatus {
+  /*background-color: lightgreen;*/
+  font-size: 6vw;
+  padding-top: 1vw;
+  text-align: left;
+  float: left;
+}
+
+.swcomponent {
+  display: inline-block;
+}
+
+#beamState {
+  font-size: 6vw;
+  padding-top: 2vw;
+  background-color: #ff8080;
+  color: transparent;
+  float: right;
+  margin-left: 1vw;
+}
+
+.swcontrol {
+  position: relative;
+  float: right;
+}
+
+.btn {
+  border: 2px solid black;
+  background-color: white;
+  color: black;
+  padding-top: 1vw;
+  padding-bottom: 1vw;
+  font-family: 'Lucida Console', 'Courier New', Courier, monospace;
+}
+
+
+.nextbtn {
+  width: 24vw;
+  font-size: 6vw;
+}
+
+.nextbtn:hover {
+  background-color: #d8d8d8;
+}
+
+.nextbtn:disabled {
+  background-color: white;
+  border: 2px solid #707070;
+  color: #707070;
+}
