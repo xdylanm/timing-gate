@@ -2,11 +2,14 @@
 <html>
 
 <head>
+    <title>Laser Timing Gate</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="style.css">
     <script src="sw.js"></script>
 </head>
 
 <body>
+    <div id="overlay"></div>
     <div class="center">
         <div id="sw" class="swtime">
             <div id="MM" class="swcomponent">00</div>:<div id="SS" class="swcomponent">00</div>.<div id="NN" class="swcomponent">00</div>
@@ -14,8 +17,8 @@
         <div class="swheader">
             <div class="swstatus" id="lblStatus">READY</div>
             <div class="swcontrol">
-                <button class="btn nextbtn" id="btnNext" onclick="sm.onButtonNext()">Next</button>
-                <div id="beamState" onclick="sm.onBeamToggle()">0</div>
+                <button class="btn nextbtn" id="btnNext">Next</button>
+                <div id="beamState">0</div>
             </div>
             
         </div>

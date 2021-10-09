@@ -41,21 +41,34 @@ const sw = {
         }
     },
 
+    externalSyncElapsedTime: function(elapsed) {
+        // adjust the start time to sync elapsed time
+        // example: locally, 12s elapsed; external, 10s --> local clock is fast
+        //          --> advance the local start time 12-10 = 2s
+        const localElapsed = performance.now() - sw.tStart;
+        const diffElapsed = localElapsed - elapsed;
+        sw.tStart += diffElapsed;
+        sw.timerCycle();
+    },
+
     timerCycle: function () {
         if (sw.running) {
-            const t = performance.now() * 0.001;  // millis
-            const dt = t - sw.tStart;
-            //pt = t;
-            const tt = Math.floor(dt);
-            const mil = dt - tt;
-            sw.lblHun.textContent = (mil).toFixed(2).slice(-2);
-            const sec = tt % 60;
-            //if (sec == ps) return;
-            //ps = sec;
-            const min = Math.floor(tt / 60) % 60;
-            sw.lblMin.textContent = ('0' + min).slice(-2);
-            sw.lblSec.textContent = ('0' + sec).slice(-2);
+            const t = performance.now();  // millis
+            sw.updateFields(t - sw.tStart);
         }
+    },
+
+    updateFields: function(elapsed) {
+        const elapsedSec = elapsed*0.001;
+        const tt = Math.floor(elapsedSec);
+        const mil = elapsedSec - tt;
+        sw.lblHun.textContent = (mil).toFixed(2).slice(-2);
+        const sec = tt % 60;
+        //if (sec == ps) return;
+        //ps = sec;
+        const min = Math.floor(tt / 60) % 60;
+        sw.lblMin.textContent = ('0' + min).slice(-2);
+        sw.lblSec.textContent = ('0' + sec).slice(-2);
     },
 
     stop: function () {
@@ -68,7 +81,7 @@ const sw = {
     start: function () {
         if (sw.started && !sw.running) {
             sw.running = true;
-            sw.tStart = performance.now() * 0.001;
+            sw.tStart = performance.now();
             sw.intervalId = setInterval(sw.timerCycle, 31);
         }
     }
@@ -80,18 +93,98 @@ const sw = {
 const sm = {
     btn: null,
     lbl: null,
-    beam :null,
+    beam: null,
+
+    beamState: false,
     statusState: "",
+
+    gateActive: false,
+
+    websocket: null,
     
-    init: function () {
-        sw.init();
+    initWebSocket: function () {
+        console.log('Trying to open a WebSocket connection...');
+        const gateway = `ws://${window.location.hostname}/ws`;
+        websocket = new WebSocket(gateway);
+        websocket.onopen = sm.onOpen;
+        websocket.onclose = sm.onClose;
+        websocket.onmessage = sm.onMessage; // <-- add this line
+    },
+
+    onOpen: function (event) {
+        console.log('Connection opened');
+    },
+
+    onClose: function (event) {
+        console.log('Connection closed');
+        sm.toInactive();
+        setTimeout(sm.initWebSocket, 2000);
+    },
+
+    onMessage: function (event) {
+        console.log(event.data);
+        const obj = JSON.parse(event.data);
+        // first update the clock (jitter)
+        if (obj.sync_elapsed_ms != undefined) {
+            sw.externalSyncElapsedTime(obj.sync_elapsed_ms);
+        }
+        // then update the beam state
+        if (obj.beam != undefined) {
+            sm.beamState = obj.beam === 1;
+            sm.onBeamEvent();
+        }
+
+        if (obj.state != undefined) {
+            if (obj.state === "Idle") {
+                sm.toIdle();
+            } else if (obj.state === "Ready") {
+                sm.toReady();
+            } else if (obj.state === "Set") {
+                sm.toSet();
+            } else if (obj.state === "Go") {
+                sm.toGo();
+            } else if (obj.state === "Finished") {
+                sm.toStop();
+            }
+        }
+
+        if (obj.mode != undefined) {
+            if (obj.mode === "Stopwatch") {
+                sm.toActive();
+            } else {
+                sm.toInactive();
+            }
+        }
+
+    },
+
+    initButton: function () {
         sm.btn = document.getElementById("btnNext");
+        sm.btn.addEventListener('click', sm.onButtonNext);
+    },
+
+    onLoad: function () {
+        sw.init();
+        sm.initButton();
         sm.lbl = document.getElementById("lblStatus");
         sm.beam = document.getElementById("beamState");
+        sm.initWebSocket();
         sm.toIdle();
+        sm.toInactive();
+    },
+
+    toActive : function() {
+        sm.gateActive = true;
+        document.getElementById("overlay").style.display = "none";
+    },
+
+    toInactive : function() {
+        sm.gateActive = false;
+        document.getElementById("overlay").style.display = "block";
     },
 
     toIdle: function () {
+        sw.resetTimer();
         sm.lbl.innerText = sm.statusState = "Idle";
         sm.btn.innerText = "Arm";
         sm.btn.disabled = true;
@@ -124,6 +217,8 @@ const sm = {
     },
 
     onButtonNext: function () {
+        /* // in debug mode, state can come from UI
+        
         if (sm.statusState === "Ready") {   // pressed "Arm"
             sm.toSet();
         } else if (sm.statusState === "Set") {   // pressed "Reset"
@@ -136,11 +231,25 @@ const sm = {
                 sm.toIdle();
             }
         }
+        
+        */
+        //const msg = {event : "apply", state : sm.statusState};
+        websocket.send("apply");
     },
 
-    onBeamToggle: function () {
-        //console.log(sm.beam.innerText);
-        if (!sm.beamConnected()) {   // re-connect
+    onBeamEvent: function () {
+        if (sm.beamState) { // connected
+            sm.beam.innerText = "1";
+            sm.beam.style.backgroundColor = "#ff8080";
+        } else {
+            sm.beam.innerText = "0";
+            sm.beam.style.backgroundColor = "#808080";
+        }
+    },
+
+    // debug routine to support user beam switching in UI
+    onBeamToggle: function() { 
+        if (!sm.beamState) {   // re-connect
             sm.beam.innerText = "1";
             sm.beam.style.backgroundColor = "#ff8080";
             if (sm.statusState === "Set") {
@@ -157,14 +266,11 @@ const sm = {
                 sm.toStop();
             }
         }
+        sm.beamState = !sm.beamState;
     },
-
-    beamConnected : function() {
-        return sm.beam.innerText === "1";
-    }
 
 };
 
 
 
-window.addEventListener("load", sm.init);
+window.addEventListener("load", sm.onLoad);
