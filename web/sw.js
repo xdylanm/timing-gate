@@ -125,6 +125,8 @@ const sm = {
         console.log(event.data);
         const obj = JSON.parse(event.data);
         // first update the clock (jitter)
+        // TODO - when the stopwatch is not running, this has no effect
+        //        need to handle the case where we haven't started yet
         if (obj.sync_elapsed_ms != undefined) {
             sw.externalSyncElapsedTime(obj.sync_elapsed_ms);
         }

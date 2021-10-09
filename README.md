@@ -13,6 +13,7 @@ An optical timing gate for sports
 ## References
 
 1. https://randomnerdtutorials.com/projects-esp32/
+2. https://randomnerdtutorials.com/esp32-websocket-server-arduino/
 
 ## User Interface
 The user interface is provided through an onboard OLED display (128x64) with two buttons, and three status LEDs. The interface is mirrored in an HTML page that is accessible through a browser on a device connected to the AP. The two buttons function as 
@@ -73,7 +74,37 @@ The first status LED tracks the state of the beam: ON indicates that the beam is
 
 The second status LED indicates when the gate is armed (athlete is in position to start, beam is disrupted). When the athlete starts and the beam re-connects with the sensor, the stopwatch starts and the armed state is reset.
 
+## Web Interface
 
+The web interface is provided via WebSockets, which enables asynchronous and near-real-time updates between the ESP and multiple connected clients. Client side behaviour is handled locally through JS, and state is held on the server. 
+
+* The clients will use their own timers for the display, relying on the server to provide time synchronization: the time displayed on the client's browser may not match the stopwatch time on the timing gate, but will be updated at the end of a lap to reflect the correct time. 
+
+* Clients can arm and reset the stopwatch ("apply" action) remotely (TODO - only give selected clients "admin" control). 
+
+* The server communicates state via JSON encoded messages. The key parts to the message are
+
+  * sync_elapsed_ms: (optional) the current elapsed stopwatch time on the gate in milliseconds
+  * beam: the status of the sensor (1=beam on sensor, 0=beam disconnected)
+  * state: the state in the stopwatch flow (Idle, Ready, Set, Go, Finished)
+  * mode: the menu mode on the gate (Stopwatch, Calibration, Wifi). When not in Stopwatch mode, the web interface is disabled.
+
+  An example message
+
+  ```json
+  {"sync_elapsed_ms":1560,"beam":1,"state":"Finished","mode":"Stopwatch"}
+  ```
+
+#### Useful Javascript Stopwatch Examples
+
+* https://code-boxx.com/simple-javascript-stopwatch/
+* https://dev.to/gspteck/create-a-stopwatch-in-javascript-2mak
+* https://jsfiddle.net/Larph/he10jyu9/
+
+#### WebSocket References
+
+* https://randomnerdtutorials.com/esp32-websocket-server-arduino/
+* https://github.com/me-no-dev/ESPAsyncWebServer
 
 ## WiFi AP
 
