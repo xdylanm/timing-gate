@@ -21,6 +21,7 @@ public:
   bool soft_apply_pressed() const { return received_apply_msg; }
   bool clear_apply_pressed() { received_apply_msg = false; }
 
+  bool enabled() const { return enabled_; }
   String wifi_status() const;
   String active_IP() const;
   String active_ssid() const;

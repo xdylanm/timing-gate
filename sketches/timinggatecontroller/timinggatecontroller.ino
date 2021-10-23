@@ -57,9 +57,10 @@ float update_light_threshold(float lo, float hi)
     return 0.5*(lo + hi);
 }  
 
-bool wifi_en = false; // to remove
+void start_AP(const char* title = nullptr);
+void start_STA(const char* title = nullptr);
+void disconnect_wifi();
 
-void start_AP();
 void on_next();
 void on_apply();
 
@@ -98,7 +99,7 @@ void setup()
     }
     digitalWrite(OPTICAL_GATE_ARMED_PIN, LOW);
   
-    start_AP();
+    start_AP("WiFi Init");
 }
 
 
@@ -164,12 +165,14 @@ void loop()
 
 }
 
-void start_AP()
+void start_AP(const char* title /*=nullptr*/)
 {
-    display.clear_all();
 
     // messages
-    display.update_title("WiFi Init");
+    if (title) {
+        display.clear_all();
+        display.update_title(title);
+    }
     display.update_status("init AP");
     display.show();
    
@@ -181,9 +184,39 @@ void start_AP()
     display.show();
     Serial.println(status + " " + current_IP);
     delay(1000);
-    display.clear_all();
+}
+
+
+void start_STA(const char* title /*=nullptr*/)
+{
+   // messages
+    if (title) {
+        display.clear_all();
+        display.update_title(title);
+    }
+    display.update_status("init STA");
     display.show();
-  
+   
+    web_server.init_STA(ssid, password);
+    
+    String status = web_server.wifi_status();
+    String current_IP = web_server.active_IP();
+    display.update_status(status.c_str(), current_IP.c_str());
+    display.show();
+    Serial.println(status + " " + current_IP);
+    delay(1000);
+}
+
+
+void disconnect_wifi()
+{
+    display.update_status("disconnecting");
+    display.show();
+   
+    if (web_server.disconnect()) {
+      display.update_status("disconnected");
+    } 
+    delay(1000);
 }
 
 
@@ -215,11 +248,21 @@ void on_next()
             mci.main_menu_index = MC::MENU_STATUS;
             sync_mode = true;
         } else if (mci.wifi_menu_index == MC::WIFI_BACK) {
-            mci.wifi_menu_index = MC::WIFI_EN;
-        }  else if (mci.wifi_menu_index == MC::WIFI_EN) {
             mci.wifi_menu_index = MC::WIFI_INFO;
         }  else if (mci.wifi_menu_index == MC::WIFI_INFO) {
-            mci.wifi_menu_index = MC::WIFI_BACK;
+            if (mci.wifi_info_menu_index == MC::WIFI_INFO_TOP) {
+                mci.wifi_menu_index = MC::WIFI_MODE;
+            } else {
+                int const ndx = (static_cast<int>(mci.wifi_info_menu_index) % static_cast<int>(MC::WIFI_INFO_BACK)) + 1;
+                mci.wifi_info_menu_index = static_cast<MC::WiFiInfoMenuChoice>(ndx);
+            }
+        }  else if (mci.wifi_menu_index == MC::WIFI_MODE) {
+            if (mci.wifi_mode_menu_index == MC::WIFI_MODE_TOP) {
+                mci.wifi_menu_index = MC::WIFI_BACK;
+            } else {
+                int const ndx = (static_cast<int>(mci.wifi_mode_menu_index) % static_cast<int>(MC::WIFI_MODE_BACK)) + 1;
+                mci.wifi_mode_menu_index = static_cast<MC::WiFiModeMenuChoice>(ndx);
+            }
         }
     }
     if (sync_mode) {
@@ -262,14 +305,28 @@ void on_apply()
         }
     } else if (mci.main_menu_index == MC::MENU_WIFI) {
         if (mci.wifi_menu_index == MC::WIFI_TOP) {
-            mci.wifi_menu_index = MC::WIFI_EN;
-        } else if (mci.wifi_menu_index == MC::WIFI_EN) {
-            wifi_en = !wifi_en;
-            //web_server.toggle_wifi_en();
+            mci.wifi_menu_index = MC::WIFI_INFO;
+        } else if (mci.wifi_menu_index == MC::WIFI_INFO) {
+            if (mci.wifi_info_menu_index == MC::WIFI_INFO_TOP) {  // to sub menu
+                mci.wifi_info_menu_index = MC::WIFI_INFO_ADDR;
+            } else if (mci.wifi_info_menu_index == MC::WIFI_INFO_BACK) {
+                mci.wifi_info_menu_index = MC::WIFI_INFO_TOP;
+            }
         }
-        //else if (mci.wifi_menu_index == WIFI_MODE) {
-        //    web_server.toggle_wifi_mode();
-        //}
+        else if (mci.wifi_menu_index == MC::WIFI_MODE) {
+            if (mci.wifi_mode_menu_index == MC::WIFI_MODE_TOP) {  // to sub menu
+                mci.wifi_mode_menu_index = MC::WIFI_MODE_AP;
+            } else {
+                if (mci.wifi_mode_menu_index == MC::WIFI_MODE_AP) {  // 
+                    start_AP();
+                } else if (mci.wifi_mode_menu_index == MC::WIFI_MODE_STA) {  // 
+                    start_STA();
+                } else if (mci.wifi_mode_menu_index == MC::WIFI_MODE_OFF) {  // 
+                    disconnect_wifi();
+                }
+                mci.wifi_mode_menu_index = MC::WIFI_MODE_TOP;
+            }
+        }
         else if (mci.wifi_menu_index == MC::WIFI_BACK) {
             mci.wifi_menu_index = MC::WIFI_TOP;
         }
@@ -312,20 +369,35 @@ void draw_cal(float const raw_val)
 void draw_wifi()
 {
     char wifi_string_buf[16];
-    if (mci.wifi_menu_index == MC::WIFI_EN) {
-        if (wifi_en /*web_server.wifi_en()*/) {
-            display.update_title("WiFi On");
-        } else {
-            display.update_title("WiFi Off");
-        }
-    } else if (mci.wifi_menu_index == MC::WIFI_INFO) {
-        String ssid_msg = "SSID " + web_server.active_ssid();
-        String pswd_msg = "Pass " + web_server.active_pswd();
+    if (mci.wifi_menu_index == MC::WIFI_INFO) {
         display.update_title("WiFi Info");
-        display.update_status(
-          web_server.wifi_status().c_str(),
-          ssid_msg.c_str(),
-          pswd_msg.c_str());
+        if (mci.wifi_info_menu_index == MC::WIFI_INFO_TOP) {
+            display.update_status(" ");
+        } else if (!web_server.enabled()) {
+            display.update_status("disconnected");
+        } else if (mci.wifi_info_menu_index == MC::WIFI_INFO_ADDR) {
+            String wifi_mode = "Mode: " + web_server.wifi_status();
+            display.update_status(wifi_mode.c_str(), web_server.active_IP().c_str());
+        } else if (mci.wifi_info_menu_index == MC::WIFI_INFO_SSID) {
+            display.update_status("SSID", web_server.active_ssid().c_str());
+        } else if (mci.wifi_info_menu_index == MC::WIFI_INFO_PASS) {
+            display.update_status("Password", web_server.active_pswd().c_str());
+        } else if (mci.wifi_info_menu_index == MC::WIFI_INFO_BACK) {
+            display.update_status("Back");
+        }
+    } else if (mci.wifi_menu_index == MC::WIFI_MODE) {
+        display.update_title("WiFi Mode");
+        if (mci.wifi_mode_menu_index == MC::WIFI_MODE_TOP) {
+            display.update_status(" ");
+        } else if (mci.wifi_mode_menu_index == MC::WIFI_MODE_AP) {
+            display.update_status("Start AP");
+        } else if (mci.wifi_mode_menu_index == MC::WIFI_MODE_STA) {
+            display.update_status("Start STA");
+        } else if (mci.wifi_mode_menu_index == MC::WIFI_MODE_OFF) {
+            display.update_status("Stop WiFi");
+        } else if (mci.wifi_mode_menu_index == MC::WIFI_MODE_BACK) {
+            display.update_status("Back");
+        }
     } else {
         display.update_title(MC::wifi_menu[mci.wifi_menu_index]);
     }

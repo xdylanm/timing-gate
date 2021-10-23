@@ -40,9 +40,6 @@ bool TimingGateServer::disconnect()
 
 bool TimingGateServer::init_STA(const char* ssid, const char* password)
 {
-    if (!disconnect()) {
-      return false;
-    }
     // Connect to Wi-Fi 
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
@@ -53,11 +50,6 @@ bool TimingGateServer::init_STA(const char* ssid, const char* password)
     enabled_ = true;
     current_ssid_ = String(ssid);
     current_pswd_ = String(password);
-
-    // Print ESP Local IP Address
-    String long_msg = "WiFi connected to " + WiFi.localIP();
-    disp_msg("connected", long_msg.c_str());
-    delay(500);
 
     init_server();
     return true;
