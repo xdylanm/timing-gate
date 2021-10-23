@@ -22,6 +22,7 @@ public:
   bool clear_apply_pressed() {apply_msg = false;}
 
   String wifi_status() const;
+  String active_IP() const;
   String active_ssid() const;
   String active_pswd() const;
 
@@ -30,7 +31,7 @@ public:
 
 private:
   void init_server();
-  void initWebSocket();
+
   static void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
              void *arg, uint8_t *data, size_t len);
   static void handleWebSocketMessage(void *arg, uint8_t *data, size_t len);

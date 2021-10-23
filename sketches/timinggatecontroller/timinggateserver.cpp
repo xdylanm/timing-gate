@@ -48,7 +48,8 @@ bool TimingGateServer::init_STA(const char* ssid, const char* password)
         delay(1000);
         disp_msg("connecting", "Connecting to WiFi..");
     }
-  
+
+    enabled = true;
     current_ssid = String(ssid);
     current_pswd = String(password);
 
@@ -63,56 +64,38 @@ bool TimingGateServer::init_STA(const char* ssid, const char* password)
 
 bool TimingGateServer::init_AP(const char* ssid, const char* password) 
 {
-    WiFi.softAP(ssid, password);
 
-    //IPAddress apIP = WiFi.softAPIP();
-    //Serial.print("AP address: ");
-    //Serial.println(apIP);
+    WiFi.enableAP(true);
+    delay(200);
+    IPAddress apIP(192,168,1,1);
+    IPAddress netmask(255,255,255,0);
+    WiFi.softAPConfig(apIP, apIP, netmask);
+
+    WiFi.softAP(ssid, password);
     delay(1000);
 
     /*
-    disp_msg("init AP", "Initalizing Access Point (AP)");
-    delay(500);
-    disp_msg(ssid,ssid);
-    delay(500);
-    disp_msg(password,password);
-    delay(500);
-    //if (!disconnect()) {
-    //  return false;
-    //}
     
     String long_msg = "Starting Access Point (AP) at 192.168.1.1" + String(", SSID: ") 
         + String(ssid) + String(", passwd: ") + String(password);
     disp_msg("starting", long_msg.c_str());
     delay(1000);
     
-    //WiFi.enableAP(true);
-    //delay(200);
-    //IPAddress apIP(192,168,1,1);
-    //IPAddress netmask(255,255,255,0);
-    //WiFi.softAPConfig(apIP, apIP, netmask);
-    WiFi.softAP(ssid, password);
-    delay(2000);
+    */
+    enabled = true;
     
     current_ssid = String(ssid);
     current_pswd = String(password);
-
-    // Print ESP Local IP Address
-    long_msg = "AP address: " + WiFi.softAPIP();
-    disp_msg("AP ready", long_msg.c_str());
-    delay(1000);
-
-    */
-
-    current_ssid = String(ssid);
-    current_pswd = String(password);
+    
     init_server();
+    
     return true;
 }
   
 void TimingGateServer::init_server() 
 {
-    initWebSocket();
+    ws.onEvent(TimingGateServer::onEvent);
+    server.addHandler(&ws);
 
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -129,11 +112,23 @@ String TimingGateServer::wifi_status() const
 {
     switch (WiFi.getMode()) {
     case WIFI_MODE_AP:
-        return String("AP ") + WiFi.softAPIP().toString();
+        return String("AP");
     case WIFI_MODE_STA:
-        return String("STA ") + WiFi.localIP().toString();
+        return String("STA");
     default:
         return String("Disconnected");
+    }
+}
+
+String TimingGateServer::active_IP() const
+{
+    switch (WiFi.getMode()) {
+    case WIFI_MODE_AP:
+        return WiFi.softAPIP().toString();
+    case WIFI_MODE_STA:
+        return WiFi.localIP().toString();
+    default:
+        return String();
     }
 }
 
@@ -164,15 +159,7 @@ void TimingGateServer::disp_msg(const char* msg, const char* long_msg)
 // broadcast to all connected clients
 void TimingGateServer::notifyClients(String const& msg) {
     if (enabled) {
-      ws.textAll(msg);
-    }
-}
-
-void TimingGateServer::initWebSocket() 
-{
-    if (enabled) {
-        ws.onEvent(TimingGateServer::onEvent);
-        server.addHandler(&ws);
+        ws.textAll(msg);
     }
 }
 
@@ -204,6 +191,7 @@ void TimingGateServer::onEvent(
       Serial.printf("WebSocket client #%u disconnected\n", client->id());
       break;
     case WS_EVT_DATA:
+      Serial.printf("WebSocket received data len %d from client #%u",len, client->id());
       handleWebSocketMessage(arg, data, len);
       break;
     case WS_EVT_PONG:

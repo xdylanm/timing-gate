@@ -41,8 +41,6 @@ int beam_state = 0;
 
 Bounce next_button = Bounce();
 Bounce apply_button = Bounce();
-bool soft_apply_pressed = false;
-
 enum { MENU_STATUS = 0, MENU_CAL, MENU_WIFI } main_menu_index;
 enum { STATUS_IDLE = 0, STATUS_READY, STATUS_SET, STATUS_STOPWATCH, STATUS_LAP_TIME } status_display_mode;
 enum { CAL_TOP = 0, CAL_AMBIENT, CAL_BEAM, CAL_BACK } cal_menu_index;
@@ -83,6 +81,8 @@ float update_light_threshold(float lo, float hi)
 
 String build_message(bool const syncTime);
 
+void start_AP();
+
 void on_next();
 void on_apply();
 
@@ -118,27 +118,13 @@ void setup()
     }
     digitalWrite(OPTICAL_GATE_ARMED_PIN, LOW);
   
-    display.clear_all();
-
-    // messages
-    display.update_title("WiFi Init");
-    display.update_status("init AP");
-    display.show();
-   
-    web_server.init_AP(ssid_ap, password_ap);
-    String status = web_server.wifi_status();
-    display.update_status(status.c_str());
-    display.show();
-    Serial.println(status);
-    delay(1000);
-    display.clear_all();
-    display.show();
+    start_AP();
 }
 
 
 void loop() 
 {
-    //web_server.ws.cleanupClients();
+    web_server.ws.cleanupClients();
     
     float const raw_val = (4095 - analogRead(OPTICAL_GATE_SENSE_PIN)) / 40.95;  // 0 - 100
     if (raw_val > light_threshold) {  // beam on
@@ -189,8 +175,8 @@ void loop()
     }
 
     apply_button.update();
-    if (apply_button.fell() || soft_apply_pressed) {
-      soft_apply_pressed = false;
+    if (apply_button.fell() || web_server.soft_apply_pressed()) {
+      web_server.clear_apply_pressed();
       on_apply();
     }
   
@@ -198,8 +184,31 @@ void loop()
 
 }
 
+void start_AP()
+{
+    display.clear_all();
+
+    // messages
+    display.update_title("WiFi Init");
+    display.update_status("init AP");
+    display.show();
+   
+    web_server.init_AP(ssid_ap, password_ap);
+    
+    String status = web_server.wifi_status();
+    String current_IP = web_server.active_IP();
+    display.update_status(status.c_str(), current_IP.c_str());
+    display.show();
+    Serial.println(status + " " + current_IP);
+    delay(1000);
+    display.clear_all();
+    display.show();
+  
+}
+
 // hand roll some Json
-String build_message(bool const syncTime) {
+String build_message(bool const syncTime) 
+{
   String msg = "{";
   if (syncTime) {
     msg += "\"sync_elapsed_ms\":";
