@@ -5,7 +5,12 @@
 
 #include "timinggateserver.h"
 #include "displaymanager.h"
+#include "menucontroller.h"
+#include "stopwatchstate.h"
 
+using MC = MenuController;
+auto& mci = MC::get_instance();
+    
 // optical gate status LED GPIO25
 #define OPTICAL_GATE_STATUS_PIN 25
 
@@ -37,41 +42,14 @@ const char* password = "xaMRbWDY";
 float ambient_light_level = 10.0;
 float beam_light_level = 90.0;
 float light_threshold = 0.0;
-int beam_state = 0;
 
 Bounce next_button = Bounce();
 Bounce apply_button = Bounce();
-enum { MENU_STATUS = 0, MENU_CAL, MENU_WIFI } main_menu_index;
-enum { STATUS_IDLE = 0, STATUS_READY, STATUS_SET, STATUS_STOPWATCH, STATUS_LAP_TIME } status_display_mode;
-enum { CAL_TOP = 0, CAL_AMBIENT, CAL_BEAM, CAL_BACK } cal_menu_index;
-enum { WIFI_TOP = 0, WIFI_EN, WIFI_MODE, WIFI_INFO, WIFI_BACK } wifi_menu_index;
-
-char const* status_menu[] = {
-    "Idle",
-    "Ready",
-    "Set",
-    "Stopwatch",
-    "Lap time"};
-    
-char const* cal_menu[] = {
-    "Calibration",
-    "Ambient",
-    "Beam",
-    "Back"};
-
-char const* wifi_menu[] = {
-    "Wifi",
-    "Enable",
-    "Mode",
-    "Info",
-    "Back"};
-
-bool wifi_en = false;
 
 hw_timer_t* timer = NULL;
-volatile unsigned long lap_time_ms = 0;
+//volatile unsigned long lap_time_ms = 0;
 void IRAM_ATTR on_timer() {
-    lap_time_ms += 10;
+    sw::lap_time_ms += 10;
 }
 
 float update_light_threshold(float lo, float hi) 
@@ -79,15 +57,17 @@ float update_light_threshold(float lo, float hi)
     return 0.5*(lo + hi);
 }  
 
-String build_message(bool const syncTime);
+bool wifi_en = false; // to remove
 
 void start_AP();
-
 void on_next();
 void on_apply();
 
 void setup() 
 {
+    sw::beam_state = 0;
+    sw::lap_time_ms = 0;
+    
     pinMode(OPTICAL_GATE_STATUS_PIN, OUTPUT);
     pinMode(OPTICAL_GATE_ARMED_PIN, OUTPUT);
 
@@ -128,43 +108,43 @@ void loop()
     
     float const raw_val = (4095 - analogRead(OPTICAL_GATE_SENSE_PIN)) / 40.95;  // 0 - 100
     if (raw_val > light_threshold) {  // beam on
-        bool do_notify = beam_state != 1;       
-        beam_state = 1;
+        bool do_notify = sw::beam_state != 1;       
+        sw::beam_state = 1;
         digitalWrite(OPTICAL_GATE_STATUS_PIN, HIGH);
-        if (main_menu_index == MENU_STATUS) {
-            if (status_display_mode == STATUS_READY) {  // was not armed
-                status_display_mode = STATUS_IDLE;
+        if (mci.main_menu_index == MC::MENU_STATUS) {
+            if (mci.status_display_mode == MC::STATUS_READY) {  // was not armed
+                mci.status_display_mode = MC::STATUS_IDLE;
                 do_notify = true;
-            } else if (status_display_mode == STATUS_SET) { // athlete started
-                status_display_mode = STATUS_STOPWATCH;
+            } else if (mci.status_display_mode == MC::STATUS_SET) { // athlete started
+                mci.status_display_mode = MC::STATUS_STOPWATCH;
                 digitalWrite(OPTICAL_GATE_ARMED_PIN, LOW);
                 timerAlarmEnable(timer);
                 do_notify = true;
             }
             if (do_notify) {
-              String const msg = build_message(false);
-              web_server.notifyClients(msg);
+              String const msg = sw::build_message(false);
+              web_server.notify_clients(msg);
             }
         }
     } else {  // beam off
-        bool do_notify = beam_state != 0;
-        beam_state = 0;
+        bool do_notify = sw::beam_state != 0;
+        sw::beam_state = 0;
         digitalWrite(OPTICAL_GATE_STATUS_PIN, LOW);
-        if (main_menu_index == MENU_STATUS) {
+        if (mci.main_menu_index == MC::MENU_STATUS) {
             bool sync_clock = false;
-            if ((status_display_mode == STATUS_STOPWATCH) && (lap_time_ms > 500)) {  // athlete finishing, debounced
-                status_display_mode = STATUS_LAP_TIME;
+            if ((mci.status_display_mode == MC::STATUS_STOPWATCH) && (sw::lap_time_ms > 500)) {  // athlete finishing, debounced
+                mci.status_display_mode = MC::STATUS_LAP_TIME;
                 timerEnd(timer);
                 timer = NULL;
                 do_notify = true;
                 sync_clock = true;
-            } else if (status_display_mode == STATUS_IDLE) {  // athlete ready, not armed
-                status_display_mode = STATUS_READY;    
+            } else if (mci.status_display_mode == MC::STATUS_IDLE) {  // athlete ready, not armed
+                mci.status_display_mode = MC::STATUS_READY;    
                 do_notify = true;
             }
             if (do_notify) {
-              String const msg = build_message(sync_clock);
-              web_server.notifyClients(msg);
+              String const msg = sw::build_message(sync_clock);
+              web_server.notify_clients(msg);
             }
         }
     }
@@ -206,136 +186,92 @@ void start_AP()
   
 }
 
-// hand roll some Json
-String build_message(bool const syncTime) 
-{
-  String msg = "{";
-  if (syncTime) {
-    msg += "\"sync_elapsed_ms\":";
-    msg += lap_time_ms;
-    msg += ",";
-  }
-  msg += "\"beam\":";
-  msg += beam_state;
-  if (main_menu_index == MENU_STATUS) {
-    msg += ",\"state\":";
-    //enum { STATUS_IDLE = 0, STATUS_READY, STATUS_SET, STATUS_STOPWATCH, STATUS_LAP_TIME } status_display_mode;
-    if (status_display_mode == STATUS_IDLE) {
-      msg += "\"Idle\"";
-    } else if (status_display_mode == STATUS_READY) {
-      msg += "\"Ready\"";
-    } else if (status_display_mode == STATUS_SET) {
-      msg += "\"Set\"";
-    } else if (status_display_mode == STATUS_STOPWATCH) {
-      msg += "\"Go\"";
-    } else if (status_display_mode == STATUS_LAP_TIME) {
-      msg += "\"Finished\"";
-    } else {
-      msg += "\"Undefined\""; // error
-    }
-  }
-  msg += ",\"mode\":";
-  if (main_menu_index == MENU_STATUS) {
-    msg += "\"Stopwatch\"";
-  } else if (main_menu_index == MENU_CAL) {
-    msg += "\"Calibration\"";
-  } else if (main_menu_index == MENU_WIFI) {
-    msg += "\"Wifi\"";
-  } else {
-    msg += "\"Undefined\""; // error
-  }
-  msg += "}";
-  Serial.println(msg);
-  return msg;
-  
-}
-
 
 void on_next() 
 {
     bool sync_mode = false;  
-    if (main_menu_index == MENU_STATUS) {
-        if (status_display_mode != STATUS_STOPWATCH) {
-            if ((status_display_mode == STATUS_SET) || (status_display_mode == STATUS_LAP_TIME)) {
-                status_display_mode = STATUS_IDLE;
+    if (mci.main_menu_index == MC::MENU_STATUS) {
+        if (mci.status_display_mode != MC::STATUS_STOPWATCH) {
+            if ((mci.status_display_mode == MC::STATUS_SET) || (mci.status_display_mode == MC::STATUS_LAP_TIME)) {
+                mci.status_display_mode = MC::STATUS_IDLE;
                 digitalWrite(OPTICAL_GATE_ARMED_PIN, LOW);
             }
-            main_menu_index = MENU_CAL;
+            mci.main_menu_index = MC::MENU_CAL;
             sync_mode = true;
         }
-    } else if (main_menu_index == MENU_CAL) {
-        if (cal_menu_index == CAL_TOP) {
-            main_menu_index = MENU_WIFI;
+    } else if (mci.main_menu_index == MC::MENU_CAL) {
+        if (mci.cal_menu_index == MC::CAL_TOP) {
+            mci.main_menu_index = MC::MENU_WIFI;
             sync_mode = true;
-        } else if (cal_menu_index == CAL_BACK) {
-            cal_menu_index = CAL_AMBIENT;
-        } else if (cal_menu_index == CAL_AMBIENT) {
-            cal_menu_index = CAL_BEAM;
-        }else if (cal_menu_index == CAL_BEAM) {
-            cal_menu_index = CAL_BACK;
+        } else if (mci.cal_menu_index == MC::CAL_BACK) {
+            mci.cal_menu_index = MC::CAL_AMBIENT;
+        } else if (mci.cal_menu_index == MC::CAL_AMBIENT) {
+            mci.cal_menu_index = MC::CAL_BEAM;
+        }else if (mci.cal_menu_index == MC::CAL_BEAM) {
+            mci.cal_menu_index = MC::CAL_BACK;
         }
     } else {
-        if (wifi_menu_index == WIFI_TOP) {
-            main_menu_index = MENU_STATUS;
+        if (mci.wifi_menu_index == MC::WIFI_TOP) {
+            mci.main_menu_index = MC::MENU_STATUS;
             sync_mode = true;
-        } else if (wifi_menu_index == WIFI_BACK) {
-            wifi_menu_index = WIFI_EN;
-        }  else if (wifi_menu_index == WIFI_EN) {
-            wifi_menu_index = WIFI_INFO;
-        }  else if (wifi_menu_index == WIFI_INFO) {
-            wifi_menu_index = WIFI_BACK;
+        } else if (mci.wifi_menu_index == MC::WIFI_BACK) {
+            mci.wifi_menu_index = MC::WIFI_EN;
+        }  else if (mci.wifi_menu_index == MC::WIFI_EN) {
+            mci.wifi_menu_index = MC::WIFI_INFO;
+        }  else if (mci.wifi_menu_index == MC::WIFI_INFO) {
+            mci.wifi_menu_index = MC::WIFI_BACK;
         }
     }
     if (sync_mode) {
-        String const msg = build_message(false);
-        web_server.notifyClients(msg);
+        String const msg = sw::build_message(false);
+        web_server.notify_clients(msg);
     }
 }
 
 void on_apply() 
 {
-    if (main_menu_index == MENU_STATUS) {
-        if (status_display_mode == STATUS_READY) {
-            status_display_mode = STATUS_SET;
+    if (mci.main_menu_index == MC::MENU_STATUS) {
+        if (mci.status_display_mode == MC::STATUS_READY) {
+            mci.status_display_mode = MC::STATUS_SET;
             digitalWrite(OPTICAL_GATE_ARMED_PIN, HIGH);
             timer = timerBegin(0, 80, true);
             timerAttachInterrupt(timer, &on_timer, true);
             timerAlarmWrite(timer, 10000, true); 
-        } else if (status_display_mode == STATUS_SET) {
-            status_display_mode = STATUS_READY; 
+        } else if (mci.status_display_mode == MC::STATUS_SET) {
+            mci.status_display_mode = MC::STATUS_READY; 
             digitalWrite(OPTICAL_GATE_ARMED_PIN, LOW);
             timerEnd(timer);
             timer = NULL;
-        } else if (status_display_mode == STATUS_LAP_TIME) {
-            status_display_mode = STATUS_IDLE; 
-            lap_time_ms = 0;
+        } else if (mci.status_display_mode == MC::STATUS_LAP_TIME) {
+            mci.status_display_mode = MC::STATUS_IDLE; 
+            sw::lap_time_ms = 0;
         }
-        String const msg = build_message(false);
-        web_server.notifyClients(msg);
-    } else if (main_menu_index == MENU_CAL) {
-        if (cal_menu_index == CAL_TOP) {
-            cal_menu_index = CAL_AMBIENT;
-        } else if (cal_menu_index == CAL_AMBIENT) {
+        String const msg = sw::build_message(false);
+        web_server.notify_clients(msg);
+    } else if (mci.main_menu_index == MC::MENU_CAL) {
+        if (mci.cal_menu_index == MC::CAL_TOP) {
+            mci.cal_menu_index = MC::CAL_AMBIENT;
+        } else if (mci.cal_menu_index == MC::CAL_AMBIENT) {
             ambient_light_level = (4095 - analogRead(OPTICAL_GATE_SENSE_PIN)) / 40.95;  // 0 - 100
             light_threshold = update_light_threshold(ambient_light_level, beam_light_level);
-        } else if (cal_menu_index == CAL_BEAM) {
+        } else if (mci.cal_menu_index == MC::CAL_BEAM) {
             beam_light_level = (4095 - analogRead(OPTICAL_GATE_SENSE_PIN)) / 40.95;  // 0 - 100
             light_threshold = update_light_threshold(ambient_light_level, beam_light_level);
-        } else if (cal_menu_index == CAL_BACK) {
-            cal_menu_index = CAL_TOP;
+        } else if (mci.cal_menu_index == MC::CAL_BACK) {
+            mci.cal_menu_index = MC::CAL_TOP;
         }
-    } else if (main_menu_index == MENU_WIFI) {
-        if (wifi_menu_index == WIFI_TOP) {
-            wifi_menu_index = WIFI_EN;
-        } else if (wifi_menu_index == WIFI_EN) {
+    } else if (mci.main_menu_index == MC::MENU_WIFI) {
+        if (mci.wifi_menu_index == MC::WIFI_TOP) {
+            mci.wifi_menu_index = MC::WIFI_EN;
+        } else if (mci.wifi_menu_index == MC::WIFI_EN) {
             wifi_en = !wifi_en;
             //web_server.toggle_wifi_en();
         }
-        //else if (wifi_menu_index == WIFI_MODE) {
+        //else if (mci.wifi_menu_index == WIFI_MODE) {
         //    web_server.toggle_wifi_mode();
         //}
-        else if (wifi_menu_index == WIFI_BACK) {
-            wifi_menu_index = WIFI_TOP;
+        else if (mci.wifi_menu_index == MC::WIFI_BACK) {
+            mci.wifi_menu_index = MC::WIFI_TOP;
         }
     }
 
@@ -344,20 +280,20 @@ void on_apply()
 void draw_stopwatch()
 {
     char time_string_buf[16];
-    if ((status_display_mode == STATUS_STOPWATCH) 
-        || (status_display_mode == STATUS_LAP_TIME))
+    if ((mci.status_display_mode == MC::STATUS_STOPWATCH) 
+        || (mci.status_display_mode == MC::STATUS_LAP_TIME))
     {
-        unsigned long current_lap_time = lap_time_ms;
-        unsigned long const mins = lap_time_ms / 60000;
+        unsigned long current_lap_time = sw::lap_time_ms;
+        unsigned long const mins = sw::lap_time_ms / 60000;
         current_lap_time %= 60000;
         unsigned long const secs = current_lap_time / 1000;
         current_lap_time %= 1000;
         current_lap_time /= 10; // to hundredths
-        char const tag = status_display_mode == STATUS_LAP_TIME ? '<' : ' ';
+        char const tag = mci.status_display_mode == MC::STATUS_LAP_TIME ? '<' : ' ';
         sprintf(time_string_buf, "%02d:%02d.%02d%c",mins, secs, current_lap_time,tag);
         display.update_vcenter_title(time_string_buf);
     } else {
-        display.update_title(status_menu[status_display_mode]);
+        display.update_title(MC::status_menu[mci.status_display_mode]);
         delay(10);
     }
 }
@@ -365,8 +301,8 @@ void draw_stopwatch()
 void draw_cal(float const raw_val) 
 {
     char sensor_string_buf[16];
-    display.update_title(cal_menu[cal_menu_index]);
-    if ((cal_menu_index == CAL_AMBIENT) || (cal_menu_index == CAL_BEAM)) { 
+    display.update_title(MC::cal_menu[mci.cal_menu_index]);
+    if ((mci.cal_menu_index == MC::CAL_AMBIENT) || (mci.cal_menu_index == MC::CAL_BEAM)) { 
         sprintf(sensor_string_buf, "%3.1f", raw_val);
         display.update_subtitle(sensor_string_buf);
     } 
@@ -376,13 +312,13 @@ void draw_cal(float const raw_val)
 void draw_wifi()
 {
     char wifi_string_buf[16];
-    if (wifi_menu_index == WIFI_EN) {
+    if (mci.wifi_menu_index == MC::WIFI_EN) {
         if (wifi_en /*web_server.wifi_en()*/) {
             display.update_title("WiFi On");
         } else {
             display.update_title("WiFi Off");
         }
-    } else if (wifi_menu_index == WIFI_INFO) {
+    } else if (mci.wifi_menu_index == MC::WIFI_INFO) {
         String ssid_msg = "SSID " + web_server.active_ssid();
         String pswd_msg = "Pass " + web_server.active_pswd();
         display.update_title("WiFi Info");
@@ -391,7 +327,7 @@ void draw_wifi()
           ssid_msg.c_str(),
           pswd_msg.c_str());
     } else {
-        display.update_title(wifi_menu[wifi_menu_index]);
+        display.update_title(MC::wifi_menu[mci.wifi_menu_index]);
     }
     delay(10);
 }
@@ -399,11 +335,11 @@ void draw_wifi()
 void invalidate_display(float const raw_val)
 {
     display.clear_all();
-    if (main_menu_index == MENU_STATUS) { 
+    if (mci.main_menu_index == MC::MENU_STATUS) { 
       draw_stopwatch();
-    } else if (main_menu_index == MENU_CAL) {
+    } else if (mci.main_menu_index == MC::MENU_CAL) {
       draw_cal(raw_val);
-    } else if (main_menu_index == MENU_WIFI) {
+    } else if (mci.main_menu_index == MC::MENU_WIFI) {
       draw_wifi();
     }
     display.show();

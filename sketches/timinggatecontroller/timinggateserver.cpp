@@ -1,22 +1,23 @@
 #include "timinggateserver.h"
 #include "htmltemplate.h"
+#include "stopwatchstate.h"
 
 #include <WiFiAP.h>
 
  
 AsyncWebServer TimingGateServer::server(80);
 AsyncWebSocket TimingGateServer::ws("/ws");
-bool TimingGateServer::apply_msg = false;
+bool TimingGateServer::received_apply_msg = false;
 
 TimingGateServer::TimingGateServer(DisplayManager* display /*=nullptr*/)
-: disp(display), enabled(false)
+: disp_(display), enabled_(false)
 {
 
 }
 
 bool TimingGateServer::disconnect() 
 {
-    if (!enabled) {
+    if (!enabled_) {
       return true;
     }
     bool disconn_ok = true;
@@ -33,7 +34,7 @@ bool TimingGateServer::disconnect()
         return false;
     }
     WiFi.mode(WIFI_OFF);
-    enabled = false;
+    enabled_ = false;
     return true;
 }
 
@@ -49,9 +50,9 @@ bool TimingGateServer::init_STA(const char* ssid, const char* password)
         disp_msg("connecting", "Connecting to WiFi..");
     }
 
-    enabled = true;
-    current_ssid = String(ssid);
-    current_pswd = String(password);
+    enabled_ = true;
+    current_ssid_ = String(ssid);
+    current_pswd_ = String(password);
 
     // Print ESP Local IP Address
     String long_msg = "WiFi connected to " + WiFi.localIP();
@@ -74,18 +75,10 @@ bool TimingGateServer::init_AP(const char* ssid, const char* password)
     WiFi.softAP(ssid, password);
     delay(1000);
 
-    /*
+    enabled_ = true;
     
-    String long_msg = "Starting Access Point (AP) at 192.168.1.1" + String(", SSID: ") 
-        + String(ssid) + String(", passwd: ") + String(password);
-    disp_msg("starting", long_msg.c_str());
-    delay(1000);
-    
-    */
-    enabled = true;
-    
-    current_ssid = String(ssid);
-    current_pswd = String(password);
+    current_ssid_ = String(ssid);
+    current_pswd_ = String(password);
     
     init_server();
     
@@ -94,7 +87,7 @@ bool TimingGateServer::init_AP(const char* ssid, const char* password)
   
 void TimingGateServer::init_server() 
 {
-    ws.onEvent(TimingGateServer::onEvent);
+    ws.onEvent(TimingGateServer::on_event);
     server.addHandler(&ws);
 
     // Route for root / web page
@@ -134,12 +127,12 @@ String TimingGateServer::active_IP() const
 
 String TimingGateServer::active_ssid() const
 {
-  return current_ssid;
+  return current_ssid_;
 }
 
 String TimingGateServer::active_pswd() const
 {
-  return current_pswd;
+  return current_pswd_;
 }
 
 
@@ -149,32 +142,32 @@ void TimingGateServer::disp_msg(const char* msg, const char* long_msg)
         Serial.println(long_msg);
     }
   
-    if (!disp) {
+    if (!disp_) {
         return;
     }
-    disp->update_status(msg);
-    disp->show();
+    disp_->update_status(msg);
+    disp_->show();
 }
 
 // broadcast to all connected clients
-void TimingGateServer::notifyClients(String const& msg) {
-    if (enabled) {
+void TimingGateServer::notify_clients(String const& msg) {
+    if (enabled_) {
         ws.textAll(msg);
     }
 }
 
 // client sent a message: apply button pressed
-void TimingGateServer::handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
+void TimingGateServer::handle_web_socket_message(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
     if (strcmp((char*)data, "apply") == 0) {
-      apply_msg = true;
+      received_apply_msg = true;
     }
   }
 }
-  
-void TimingGateServer::onEvent(
+
+void TimingGateServer::on_event(
     AsyncWebSocket *server, 
     AsyncWebSocketClient *client, 
     AwsEventType type,
@@ -185,14 +178,14 @@ void TimingGateServer::onEvent(
   switch (type) {
     case WS_EVT_CONNECT:
       Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-      //ws.text(client->id(),buildMessage(true)); 
+      ws.text(client->id(),sw::build_message(true)); 
       break;
     case WS_EVT_DISCONNECT:
       Serial.printf("WebSocket client #%u disconnected\n", client->id());
       break;
     case WS_EVT_DATA:
       Serial.printf("WebSocket received data len %d from client #%u",len, client->id());
-      handleWebSocketMessage(arg, data, len);
+      handle_web_socket_message(arg, data, len);
       break;
     case WS_EVT_PONG:
     case WS_EVT_ERROR:

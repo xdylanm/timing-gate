@@ -16,10 +16,10 @@ public:
   bool init_STA(const char* ssid, const char* password);
   bool init_AP(const char* ssid, const char* password);
 
-  void notifyClients(String const& msg);
+  void notify_clients(String const& msg);
 
-  bool soft_apply_pressed() const { return apply_msg; }
-  bool clear_apply_pressed() {apply_msg = false;}
+  bool soft_apply_pressed() const { return received_apply_msg; }
+  bool clear_apply_pressed() { received_apply_msg = false; }
 
   String wifi_status() const;
   String active_IP() const;
@@ -32,19 +32,18 @@ public:
 private:
   void init_server();
 
-  static void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
+  static void on_event(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
              void *arg, uint8_t *data, size_t len);
-  static void handleWebSocketMessage(void *arg, uint8_t *data, size_t len);
+  static void handle_web_socket_message(void *arg, uint8_t *data, size_t len);
 
-  static bool apply_msg;
-
+  static bool received_apply_msg;
   void disp_msg(const char* msg, const char* long_msg);
 
-  bool enabled;
-  DisplayManager* disp;
+  bool enabled_;
+  DisplayManager* disp_;
 
-  String current_ssid;
-  String current_pswd;
+  String current_ssid_;
+  String current_pswd_;
 
 };
 
