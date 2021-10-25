@@ -38,6 +38,7 @@ const sw = {
             sw.lblMin.textContent = '00';
             sw.lblSec.textContent = '00';
             sw.lblHun.textContent = '00';
+            sw.tStart = 0
         }
     },
 
@@ -82,7 +83,7 @@ const sw = {
         if (sw.started && !sw.running) {
             sw.running = true;
             sw.tStart = performance.now();
-            sw.intervalId = setInterval(sw.timerCycle, 31);
+            sw.intervalId = setInterval(sw.timerCycle, 23);
         }
     }
 };
@@ -124,10 +125,13 @@ const sm = {
     onMessage: function (event) {
         console.log(event.data);
         const obj = JSON.parse(event.data);
-        // first update the clock (jitter)
-        // TODO - when the stopwatch is not running, this has no effect
-        //        need to handle the case where we haven't started yet
-        if (obj.sync_elapsed_ms != undefined) {
+        // first update the clock if the stopwatch is running 
+        // -- this handles periodic syncs & final sync before
+        //    changing state to finished. 
+        // -- Has no effect if not running. Need to apply again on "go"
+        const sync_time = (obj.sync_elapsed_ms != undefined);
+        const is_running = sw.running;
+        if (sync_time && is_running) {
             sw.externalSyncElapsedTime(obj.sync_elapsed_ms);
         }
         // then update the beam state
@@ -145,6 +149,9 @@ const sm = {
                 sm.toSet();
             } else if (obj.state === "Go") {
                 sm.toGo();
+                if (!is_running && sync_time) { // sync after run starts 
+                    sw.externalSyncElapsedTime(obj.sync_elapsed_ms);
+                }
             } else if (obj.state === "Finished") {
                 sm.toStop();
             }
