@@ -1,10 +1,12 @@
 #include "htmltemplate.h"
 
-namespace HTML 
+namespace HTML
 {
-  
+
 const char PROGMEM index[] = R"rawliteral(
-<!DOCTYPE html><html>
+<!DOCTYPE html>
+<html>
+
 <head>
     <title>Laser Timing Gate</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -230,8 +232,9 @@ const char PROGMEM index[] = R"rawliteral(
           onMessage: function (event) {
               console.log(event.data);
               const obj = JSON.parse(event.data);
-
               // first update the clock (jitter)
+              // TODO - when the stopwatch is not running, this has no effect
+              //        need to handle the case where we haven't started yet
               if (obj.sync_elapsed_ms != undefined) {
                   sw.externalSyncElapsedTime(obj.sync_elapsed_ms);
               }
@@ -377,8 +380,10 @@ const char PROGMEM index[] = R"rawliteral(
           },
       
       };
+      
+      
+      
       window.addEventListener("load", sm.onLoad);
-    
     </script>
 </head>
 
@@ -401,7 +406,5 @@ const char PROGMEM index[] = R"rawliteral(
 
 </html>
 )rawliteral";
-
-
 
 } // namespace HTML
