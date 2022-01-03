@@ -53,12 +53,12 @@ The user interface is provided through an onboard OLED display (128x64) with two
    * [next] to WiFi
 3. WiFi
    * [apply] enters menu
-     * Enable: displays Wifi status (en/dis)
-       * [apply] switches on/off
-       * [next] to Info
-     * Info: displays Wifi SSID & Password
-       * [apply] locks or unlocks ability to remote change password (through web interface) 
-       * [next] to Back
+     * Info: displays IP & mode (AP or STA), SSID, Password & Back
+       * [apply] no effect except on "Back"
+       * [next] cycles through sub menu
+     * Mode: displays options to Start AP, Start STA, Stop WiFi & Back
+       * [apply] changes WiFi Configuration (e.g. start as a station), then return to top menu
+       * [next] cycles through sub menu
      * Back:
        * [apply] to Wifi
        * [next] to Enable
@@ -68,11 +68,11 @@ The user interface is provided through an onboard OLED display (128x64) with two
 
 #### Beam State
 
-The first status LED tracks the state of the beam: ON indicates that the beam is illuminating the sensor, OFF indicates that the beam is disrupted.  
+The first status LED (red) tracks the state of the beam: ON indicates that the beam is illuminating the sensor, OFF indicates that the beam is disrupted.  
 
 #### Armed State
 
-The second status LED indicates when the gate is armed (athlete is in position to start, beam is disrupted). When the athlete starts and the beam re-connects with the sensor, the stopwatch starts and the armed state is reset.
+The second status LED (green) indicates when the gate is armed (athlete is in position to start, beam is disrupted). When the athlete starts and the beam re-connects with the sensor, the stopwatch starts and the armed state is reset. The athlete can start as soon as the green armed LED is lit.
 
 ## Web Interface
 
